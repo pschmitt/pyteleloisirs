@@ -5,11 +5,11 @@ setup(
     name='pyteleloisirs',
     version='1.1',
     license='GPL3',
-    description='Get TV program data from teleloisir',
+    description='Get TV program data from teleloisirs',
     long_description=open('README.rst').read(),
     author='Philipp Schmitt',
     author_email='philipp@schmitt.co',
-    url='https://github.com/pschmitt/pyteleloisir',
+    url='https://github.com/pschmitt/pyteleloisirs',
     packages=find_packages(),
     install_requires=['requests', 'bs4'],
 )
