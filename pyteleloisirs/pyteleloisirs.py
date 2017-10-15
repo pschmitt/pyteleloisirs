@@ -22,13 +22,22 @@ def _request_soup(url):
     return BeautifulSoup(res.text, 'html.parser')
 
 
-def get_channels(no_cache=False):
+def get_channels(no_cache=False, refresh_interval=4):
     '''
     Get channel list and corresponding urls
     '''
+    # Check cache
+    now = datetime.datetime.now()
+    max_cache_age = datetime.timedelta(hours=refresh_interval)
     if not no_cache and 'channels' in _CACHE:
-        _LOGGER.debug('Found channel list in cache.')
-        return _CACHE.get('channels')
+        cache = _CACHE.get('channels')
+        cache_age = cache.get('last_updated')
+        if now - cache_age < max_cache_age:
+            _LOGGER.debug('Found channel list in cache.')
+            return cache.get('data')
+        else:
+            _LOGGER.debug('Found outdated channel list in cache. Update it.')
+            _CACHE.pop('channels')
     soup = _request_soup(BASE_URL + '/plan.html')
     channels = {}
     for li_item in soup.find_all('li'):
@@ -40,7 +49,7 @@ def get_channels(no_cache=False):
             continue
         channels[child.get('title')] = href
     if channels:
-        _CACHE['channels'] = channels
+        _CACHE['channels'] = {'last_updated': now, 'data': channels}
     return channels
 
 
@@ -54,13 +63,21 @@ def get_channel_url(channel):
         return BASE_URL + rel_url
 
 
-def get_program_guide(channel, no_cache=False):
+def get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
     Get the program data for a channel
     '''
+    now = datetime.datetime.now()
+    max_cache_age = datetime.timedelta(hours=refresh_interval)
     if not no_cache and 'guide' in _CACHE and _CACHE.get('guide').get(channel):
-        _LOGGER.debug('Found program guide for %s in cache.', channel)
-        return _CACHE.get('guide').get(channel)
+        cache = _CACHE.get('guide').get(channel)
+        cache_age = cache.get('last_updated')
+        if now - cache_age < max_cache_age:
+            _LOGGER.debug('Found program guide in cache.')
+            return cache.get('data')
+        else:
+            _LOGGER.debug('Found outdated program guide in cache. Update it.')
+            _CACHE['guide'].pop(channel)
     url = get_channel_url(channel)
     soup = _request_soup(url)
     programs = []
@@ -80,7 +97,7 @@ def get_program_guide(channel, no_cache=False):
     if programs:
         if 'guide' not in _CACHE:
             _CACHE['guide'] = {}
-        _CACHE['guide'][channel] = programs
+        _CACHE['guide'][channel] = {'last_updated': now, 'data': programs}
     return programs
 
 
