@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import datetime
+import logging
+
+
+_CACHE = {}
+_LOGGER = logging.getLogger(__name__)
+BASE_URL = 'http://www.programme-tv.net'
+
+
+def _request_soup(url):
+    '''
+    Perform a GET web request and return a bs4 parser
+    '''
+    import requests
+    from bs4 import BeautifulSoup
+    _LOGGER.debug('GET %s', url)
+    res = requests.get(url)
+    res.raise_for_status()
+    return BeautifulSoup(res.text, 'html.parser')
+
+
+def get_channels(no_cache=False):
+    '''
+    Get channel list and corresponding urls
+    '''
+    if not no_cache and 'channels' in _CACHE:
+        _LOGGER.debug('Found channel list in cache.')
+        return _CACHE.get('channels')
+    soup = _request_soup(BASE_URL + '/plan.html')
+    channels = {}
+    for li_item in soup.find_all('li'):
+        child = li_item.findChild()
+        if not child or child.name != 'a':
+            continue
+        href = child.get('href')
+        if not href or not href.startswith('/programme/chaine'):
+            continue
+        channels[child.get('title')] = href
+    if channels:
+        _CACHE['channels'] = channels
+    return channels
+
+
+def get_channel_url(channel):
+    '''
+    Get the URL of a channel
+    '''
+    chans = get_channels()
+    rel_url = chans.get(channel)
+    if rel_url:
+        return BASE_URL + rel_url
+
+
+def get_program_guide(channel, no_cache=False):
+    '''
+    Get the program data for a channel
+    '''
+    if not no_cache and 'guide' in _CACHE and _CACHE.get('guide').get(channel):
+        _LOGGER.debug('Found program guide for %s in cache.', channel)
+        return _CACHE.get('guide').get(channel)
+    url = get_channel_url(channel)
+    soup = _request_soup(url)
+    programs = []
+    for prg_item in soup.find_all('div', {'class': 'program-infos'}):
+        prog_name = prg_item.find('a', {'class': 'prog_name'}).text.strip()
+        prog_type = prg_item.find('span', {'class': 'prog_type'}).text.strip()
+        prog_times = prg_item.find('div', {'class': 'prog_progress'})
+        prog_start = datetime.datetime.fromtimestamp(
+            int(prog_times.get('data-start')))
+        prog_end = datetime.datetime.fromtimestamp(
+            int(prog_times.get('data-end')))
+        prog_img = prg_item.find_previous_sibling().find(
+            'img', {'class': 'prime_broadcast_image'}).get('data-src')
+        programs.append(
+            {'name': prog_name, 'type': prog_type, 'img': prog_img,
+             'start_time': prog_start, 'end_time': prog_end})
+    if programs:
+        if 'guide' not in _CACHE:
+            _CACHE['guide'] = {}
+        _CACHE['guide'][channel] = programs
+    return programs
+
+
+def get_current_program(channel):
+    '''
+    Get the current program info
+    '''
+    guide = get_program_guide(channel)
+    now = datetime.datetime.now()
+    for prog in guide:
+        start = prog.get('start_time')
+        end = prog.get('end_time')
+        if now > start and now < end:
+            return prog
