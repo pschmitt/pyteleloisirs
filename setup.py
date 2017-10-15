@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 
 setup(
-    name='pyteleloisir',
+    name='pyteleloisirs',
     version='1.0',
     license='GPL3',
     description='Get TV program data from teleloisir',
