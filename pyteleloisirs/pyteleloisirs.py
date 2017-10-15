@@ -79,6 +79,9 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
             _LOGGER.debug('Found outdated program guide in cache. Update it.')
             _CACHE['guide'].pop(channel)
     url = get_channel_url(channel)
+    if not url:
+        _LOGGER.error('Could not determine URL for %s', channel)
+        return
     soup = _request_soup(url)
     programs = []
     for prg_item in soup.find_all('div', {'class': 'program-infos'}):
@@ -106,6 +109,9 @@ def get_current_program(channel):
     Get the current program info
     '''
     guide = get_program_guide(channel)
+    if not guide:
+        _LOGGER.warning('Could not retrieve TV program for %s', channel)
+        return
     now = datetime.datetime.now()
     for prog in guide:
         start = prog.get('start_time')
