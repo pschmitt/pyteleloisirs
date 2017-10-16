@@ -63,6 +63,15 @@ def get_channel_url(channel):
         return BASE_URL + rel_url
 
 
+def extract_program_synopsis(url):
+    '''
+    Extract the synopsis/summary from a program's detail page
+    '''
+    soup = _request_soup(url)
+    return soup.find(
+        'div', {'class': 'episode-synopsis'}).find_all('div')[-1].text.strip()
+
+
 def get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
     Get the program data for a channel
@@ -82,7 +91,10 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
     soup = _request_soup(url)
     programs = []
     for prg_item in soup.find_all('div', {'class': 'program-infos'}):
-        prog_name = prg_item.find('a', {'class': 'prog_name'}).text.strip()
+        prog_info = prg_item.find('a', {'class': 'prog_name'})
+        prog_name = prog_info.text.strip()
+        prog_url = prog_info.get('href')
+        prog_summary = extract_program_synopsis(BASE_URL + prog_url)
         prog_type = prg_item.find('span', {'class': 'prog_type'}).text.strip()
         prog_times = prg_item.find('div', {'class': 'prog_progress'})
         prog_start = datetime.datetime.fromtimestamp(
@@ -93,7 +105,8 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
             'img', {'class': 'prime_broadcast_image'}).get('data-src')
         programs.append(
             {'name': prog_name, 'type': prog_type, 'img': prog_img,
-             'start_time': prog_start, 'end_time': prog_end})
+             'summary': prog_summary, 'start_time': prog_start,
+             'end_time': prog_end})
     if programs:
         if 'guide' not in _CACHE:
             _CACHE['guide'] = {}
