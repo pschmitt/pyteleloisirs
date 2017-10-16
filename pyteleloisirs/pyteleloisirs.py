@@ -41,13 +41,17 @@ def get_channels(no_cache=False, refresh_interval=4):
     soup = _request_soup(BASE_URL + '/plan.html')
     channels = {}
     for li_item in soup.find_all('li'):
-        child = li_item.findChild()
-        if not child or child.name != 'a':
-            continue
-        href = child.get('href')
-        if not href or not href.startswith('/programme/chaine'):
-            continue
-        channels[child.get('title')] = href
+        try:
+            child = li_item.findChild()
+            if not child or child.name != 'a':
+                continue
+            href = child.get('href')
+            if not href or not href.startswith('/programme/chaine'):
+                continue
+            channels[child.get('title')] = href
+        except Exception as exc:
+            _LOGGER.error('Exception occured while fetching the channel '
+                          'list: %s', exc)
     if channels:
         _CACHE['channels'] = {'last_updated': now, 'data': channels}
     return channels
@@ -68,8 +72,13 @@ def extract_program_synopsis(url):
     Extract the synopsis/summary from a program's detail page
     '''
     soup = _request_soup(url)
-    return soup.find(
-        'div', {'class': 'episode-synopsis'}).find_all('div')[-1].text.strip()
+    try:
+        return soup.find(
+            'div', {'class': 'episode-synopsis'}
+        ).find_all('div')[-1].text.strip()
+    except Exception as exc:
+        _LOGGER.error('Failed to extract program summary from '
+                      '%s: %s', url, exc)
 
 
 def get_program_guide(channel, no_cache=False, refresh_interval=4):
@@ -94,22 +103,31 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
     soup = _request_soup(url)
     programs = []
     for prg_item in soup.find_all('div', {'class': 'program-infos'}):
-        prog_info = prg_item.find('a', {'class': 'prog_name'})
-        prog_name = prog_info.text.strip()
-        prog_url = prog_info.get('href')
-        prog_summary = extract_program_synopsis(BASE_URL + prog_url)
-        prog_type = prg_item.find('span', {'class': 'prog_type'}).text.strip()
-        prog_times = prg_item.find('div', {'class': 'prog_progress'})
-        prog_start = datetime.datetime.fromtimestamp(
-            int(prog_times.get('data-start')))
-        prog_end = datetime.datetime.fromtimestamp(
-            int(prog_times.get('data-end')))
-        prog_img = prg_item.find_previous_sibling().find(
-            'img', {'class': 'prime_broadcast_image'}).get('data-src')
-        programs.append(
-            {'name': prog_name, 'type': prog_type, 'img': prog_img,
-             'summary': prog_summary, 'start_time': prog_start,
-             'end_time': prog_end})
+        try:
+            prog_info = prg_item.find('a', {'class': 'prog_name'})
+            prog_name = prog_info.text.strip()
+            prog_url = prog_info.get('href')
+            prog_summary = None
+            if prog_url:
+                prog_summary = extract_program_synopsis(BASE_URL + prog_url)
+            else:
+                _LOGGER.warning('Failed to retrive the detail URL for program %s. '
+                                'The summary will be empty', prog_name)
+            prog_type = prg_item.find('span', {'class': 'prog_type'}).text.strip()
+            prog_times = prg_item.find('div', {'class': 'prog_progress'})
+            prog_start = datetime.datetime.fromtimestamp(
+                int(prog_times.get('data-start')))
+            prog_end = datetime.datetime.fromtimestamp(
+                int(prog_times.get('data-end')))
+            prog_img = prg_item.find_previous_sibling().find(
+                'img', {'class': 'prime_broadcast_image'}).get('data-src')
+            programs.append(
+                {'name': prog_name, 'type': prog_type, 'img': prog_img,
+                 'summary': prog_summary, 'start_time': prog_start,
+                 'end_time': prog_end})
+        except Exception as exc:
+            _LOGGER.error('Exception occured while fetching the program '
+                          'guide for channel %s: %s', channel, exc)
     if programs:
         if 'guide' not in _CACHE:
             _CACHE['guide'] = {}
