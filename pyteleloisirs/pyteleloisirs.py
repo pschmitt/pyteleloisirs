@@ -5,6 +5,9 @@ import datetime
 import logging
 import re
 
+import asyncio
+import aiohttp
+
 
 _CACHE = {}
 _LOGGER = logging.getLogger(__name__)
@@ -68,20 +71,6 @@ def get_channel_url(channel):
         return BASE_URL + rel_url
 
 
-def extract_program_synopsis(url):
-    '''
-    Extract the synopsis/summary from a program's detail page
-    '''
-    soup = _request_soup(url)
-    try:
-        return soup.find(
-            'div', {'class': 'episode-synopsis'}
-        ).find_all('div')[-1].text.strip()
-    except Exception as exc:
-        _LOGGER.error('Failed to extract program summary from '
-                      '%s: %s', url, exc)
-
-
 def resize_program_image(img_url, img_size=300):
     '''
     Resize a program's thumbnail to the desired dimension
@@ -99,6 +88,32 @@ def resize_program_image(img_url, img_size=300):
         r'{}x{}'.format(res_x, res_y),
         r'{}x{}'.format(img_size, target_res_y),
         img_url)
+
+
+async def async_extract_program_summary(data):
+    '''
+    Extract the summary data from a program's detail page
+    '''
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(data, 'html.parser')
+    try:
+        return soup.find(
+            'div', {'class': 'episode-synopsis'}
+        ).find_all('div')[-1].text.strip()
+    except Exception as exc:
+        _LOGGER.error('Exception during summary extraction: %s', exc)
+
+
+async def async_set_summary(program):
+    '''
+    Set a program's summary
+    '''
+    async with aiohttp.ClientSession() as session:
+        async with session.get(program.get('url')) as resp:
+            summary = await async_extract_program_summary(await resp.text())
+            program['summary'] = summary
+            return program
+
 
 def get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
@@ -128,7 +143,7 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
             prog_url = prog_info.get('href')
             prog_summary = None
             if prog_url:
-                prog_summary = extract_program_synopsis(BASE_URL + prog_url)
+                prog_url = BASE_URL + prog_url
             else:
                 _LOGGER.warning('Failed to retrive the detail URL for program %s. '
                                 'The summary will be empty', prog_name)
@@ -142,11 +157,18 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
                 'img', {'class': 'prime_broadcast_image'}).get('data-src')
             programs.append(
                 {'name': prog_name, 'type': prog_type, 'img': prog_img,
-                 'summary': prog_summary, 'start_time': prog_start,
+                 'url': prog_url, 'summary': None, 'start_time': prog_start,
                  'end_time': prog_end})
         except Exception as exc:
             _LOGGER.error('Exception occured while fetching the program '
                           'guide for channel %s: %s', channel, exc)
+    # Set the program summaries asynchronously
+    loop = asyncio.get_event_loop()
+    programs = loop.run_until_complete(
+        asyncio.gather(
+            *(async_set_summary(prog) for prog in programs)
+        )
+    )
     if programs:
         if 'guide' not in _CACHE:
             _CACHE['guide'] = {}
