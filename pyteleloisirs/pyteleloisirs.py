@@ -18,12 +18,31 @@ def _request_soup(url):
     '''
     Perform a GET web request and return a bs4 parser
     '''
-    import requests
     from bs4 import BeautifulSoup
+    import requests
     _LOGGER.debug('GET %s', url)
     res = requests.get(url)
     res.raise_for_status()
     return BeautifulSoup(res.text, 'html.parser')
+
+
+def determine_channel(channel):
+    '''
+    Check whether the current channel is correct. If not try to determine it
+    using fuzzywuzzy
+    '''
+    from fuzzywuzzy import process
+    channel_data = get_channels()
+    if not channel_data:
+        _LOGGER.error('No channel data. Cannot determine requested channel.')
+        return
+    channels = [c for c in channel_data.get('data', {}).keys()]
+    if channel in channels:
+        return channel
+    else:
+        res = process.extractOne(channel, channels)[0]
+        _LOGGER.debug('No direct match found for %s. Resort to guesswork')
+        return res
 
 
 def get_channels(no_cache=False, refresh_interval=4):
@@ -38,7 +57,7 @@ def get_channels(no_cache=False, refresh_interval=4):
         cache_age = cache.get('last_updated')
         if now - cache_age < max_cache_age:
             _LOGGER.debug('Found channel list in cache.')
-            return cache.get('data')
+            return cache
         else:
             _LOGGER.debug('Found outdated channel list in cache. Update it.')
             _CACHE.pop('channels')
@@ -58,7 +77,7 @@ def get_channels(no_cache=False, refresh_interval=4):
                           'list: %s', exc)
     if channels:
         _CACHE['channels'] = {'last_updated': now, 'data': channels}
-    return channels
+        return _CACHE['channels']
 
 
 def get_channel_url(channel):
@@ -66,7 +85,7 @@ def get_channel_url(channel):
     Get the URL of a channel
     '''
     chans = get_channels()
-    rel_url = chans.get(channel)
+    rel_url = chans.get('data', {}).get(channel)
     if rel_url:
         return BASE_URL + rel_url
 
@@ -115,24 +134,25 @@ async def async_set_summary(program):
             return program
 
 
-def get_program_guide(channel, no_cache=False, refresh_interval=4):
+async def get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
     Get the program data for a channel
     '''
+    chan = determine_channel(channel)
     now = datetime.datetime.now()
     max_cache_age = datetime.timedelta(hours=refresh_interval)
-    if not no_cache and 'guide' in _CACHE and _CACHE.get('guide').get(channel):
-        cache = _CACHE.get('guide').get(channel)
+    if not no_cache and 'guide' in _CACHE and _CACHE.get('guide').get(chan):
+        cache = _CACHE.get('guide').get(chan)
         cache_age = cache.get('last_updated')
         if now - cache_age < max_cache_age:
             _LOGGER.debug('Found program guide in cache.')
             return cache.get('data')
         else:
             _LOGGER.debug('Found outdated program guide in cache. Update it.')
-            _CACHE['guide'].pop(channel)
-    url = get_channel_url(channel)
+            _CACHE['guide'].pop(chan)
+    url = get_channel_url(chan)
     if not url:
-        _LOGGER.error('Could not determine URL for %s', channel)
+        _LOGGER.error('Could not determine URL for %s', chan)
         return
     soup = _request_soup(url)
     programs = []
@@ -161,26 +181,23 @@ def get_program_guide(channel, no_cache=False, refresh_interval=4):
                  'end_time': prog_end})
         except Exception as exc:
             _LOGGER.error('Exception occured while fetching the program '
-                          'guide for channel %s: %s', channel, exc)
+                          'guide for channel %s: %s', chan, exc)
     # Set the program summaries asynchronously
-    loop = asyncio.get_event_loop()
-    programs = loop.run_until_complete(
-        asyncio.gather(
-            *(async_set_summary(prog) for prog in programs)
-        )
-    )
+    tasks = [async_set_summary(prog) for prog in programs]
+    programs = await asyncio.gather(*tasks)
     if programs:
         if 'guide' not in _CACHE:
             _CACHE['guide'] = {}
-        _CACHE['guide'][channel] = {'last_updated': now, 'data': programs}
+        _CACHE['guide'][chan] = {'last_updated': now, 'data': programs}
     return programs
 
 
-def get_current_program(channel):
+async def get_current_program(channel, no_cache=False):
     '''
     Get the current program info
     '''
-    guide = get_program_guide(channel)
+    chan = determine_channel(channel)
+    guide = await get_program_guide(chan, no_cache)
     if not guide:
         _LOGGER.warning('Could not retrieve TV program for %s', channel)
         return

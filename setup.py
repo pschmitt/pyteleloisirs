@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='pyteleloisirs',
-    version='2.0',
+    version='2.1',
     license='GPL3',
     description='Get TV program data from teleloisirs',
     long_description=open('README.rst').read(),
@@ -11,5 +11,5 @@ setup(
     author_email='philipp@schmitt.co',
     url='https://github.com/pschmitt/pyteleloisirs',
     packages=find_packages(),
-    install_requires=['requests', 'bs4'],
+    install_requires=['requests', 'bs4', 'fuzzywuzzy', 'python-Levenshtein']
 )
