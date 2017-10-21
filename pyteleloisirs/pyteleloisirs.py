@@ -6,7 +6,6 @@ import logging
 import re
 
 import asyncio
-import aiohttp
 
 
 _CACHE = {}
@@ -127,6 +126,7 @@ async def async_set_summary(program):
     '''
     Set a program's summary
     '''
+    import aiohttp
     async with aiohttp.ClientSession() as session:
         async with session.get(program.get('url')) as resp:
             summary = await async_extract_program_summary(await resp.text())
@@ -134,7 +134,7 @@ async def async_set_summary(program):
             return program
 
 
-async def get_program_guide(channel, no_cache=False, refresh_interval=4):
+async def async_get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
     Get the program data for a channel
     '''
@@ -192,12 +192,12 @@ async def get_program_guide(channel, no_cache=False, refresh_interval=4):
     return programs
 
 
-async def get_current_program(channel, no_cache=False):
+async def async_get_current_program(channel, no_cache=False):
     '''
     Get the current program info
     '''
     chan = determine_channel(channel)
-    guide = await get_program_guide(chan, no_cache)
+    guide = await async_get_program_guide(chan, no_cache)
     if not guide:
         _LOGGER.warning('Could not retrieve TV program for %s', channel)
         return
@@ -207,3 +207,15 @@ async def get_current_program(channel, no_cache=False):
         end = prog.get('end_time')
         if now > start and now < end:
             return prog
+
+
+def get_program_guide(channel, no_cache=False):
+    loop = asyncio.get_event_loop()
+    res = loop.run_until_complete(async_get_program_guide(channel, no_cache))
+    return res
+
+
+def get_current_program(channel, no_cache=False):
+    loop = asyncio.get_event_loop()
+    res = loop.run_until_complete(async_get_current_program(channel, no_cache))
+    return res
