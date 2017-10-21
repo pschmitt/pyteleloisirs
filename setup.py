@@ -11,5 +11,6 @@ setup(
     author_email='philipp@schmitt.co',
     url='https://github.com/pschmitt/pyteleloisirs',
     packages=find_packages(),
-    install_requires=['requests', 'bs4', 'fuzzywuzzy', 'python-Levenshtein']
+    install_requires=['aiohttp', 'requests', 'bs4', 'fuzzywuzzy', 'python-Levenshtein'],
+    scripts=['bin/teleloisirs']
 )
