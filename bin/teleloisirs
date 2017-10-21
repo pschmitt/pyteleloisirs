@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import asyncio
+import argparse
+import datetime
+import logging
+import pprint
+
+import pyteleloisirs
+
+
+def parse_args():
+    '''
+    CLI args
+    '''
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-g', '--guide', help='Show daily guide',
+                        action='store_true', default=False)
+    parser.add_argument('-H', '--human-readable', help='Human readable output',
+                        action='store_true', default=False)
+    parser.add_argument('-s', '--summary', help='Display program summary',
+                        action='store_true', default=False)
+    parser.add_argument('CHANNEL', help='Target channel')
+    return parser.parse_args()
+
+
+def humanize(program_data, show_summary=False):
+    '''
+    Display program data in a human-readable way
+    '''
+    data = program_data if isinstance(program_data, list) else [program_data]
+    for program in data:
+        start = datetime.datetime.strftime(program.get('start_time'), '%H:%m')
+        end = datetime.datetime.strftime(program.get('end_time'), '%H:%m')
+        summary = program.get('summary')
+        if show_summary:
+            print('{}-{}: {}\n{}'.format(
+                start, end, program.get('name'),
+                summary if summary else 'No summary data'
+            ))
+        else:
+            print('{}-{}: {}'.format(start, end, program.get('name')))
+
+
+async def main():
+    '''
+    Main entrypoint
+    '''
+    args = parse_args()
+    if args.guide:
+        res = await pyteleloisirs.get_program_guide(args.CHANNEL)
+    else:
+        res = await pyteleloisirs.get_current_program(args.CHANNEL)
+    if args.human_readable:
+        humanize(res, args.summary)
+    else:
+        pprint.pprint(res)
+
+
+if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    loop.close()
