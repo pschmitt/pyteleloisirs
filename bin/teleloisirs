@@ -49,9 +49,9 @@ async def main():
     '''
     args = parse_args()
     if args.guide:
-        res = await pyteleloisirs.get_program_guide(args.CHANNEL)
+        res = await pyteleloisirs.async_get_program_guide(args.CHANNEL)
     else:
-        res = await pyteleloisirs.get_current_program(args.CHANNEL)
+        res = await pyteleloisirs.async_get_current_program(args.CHANNEL)
     if args.human_readable:
         humanize(res, args.summary)
     else:

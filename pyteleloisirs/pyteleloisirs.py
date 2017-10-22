@@ -13,25 +13,26 @@ _LOGGER = logging.getLogger(__name__)
 BASE_URL = 'http://www.programme-tv.net'
 
 
-def _request_soup(url):
+async def _async_request_soup(url):
     '''
     Perform a GET web request and return a bs4 parser
     '''
     from bs4 import BeautifulSoup
-    import requests
+    import aiohttp
     _LOGGER.debug('GET %s', url)
-    res = requests.get(url)
-    res.raise_for_status()
-    return BeautifulSoup(res.text, 'html.parser')
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            return BeautifulSoup(await resp.text(), 'html.parser')
 
 
-def determine_channel(channel):
+
+async def async_determine_channel(channel):
     '''
     Check whether the current channel is correct. If not try to determine it
     using fuzzywuzzy
     '''
     from fuzzywuzzy import process
-    channel_data = get_channels()
+    channel_data = await async_get_channels()
     if not channel_data:
         _LOGGER.error('No channel data. Cannot determine requested channel.')
         return
@@ -40,11 +41,12 @@ def determine_channel(channel):
         return channel
     else:
         res = process.extractOne(channel, channels)[0]
-        _LOGGER.debug('No direct match found for %s. Resort to guesswork')
+        _LOGGER.debug('No direct match found for %s. Resort to guesswork.'
+                      'Guessed %s', channel, res)
         return res
 
 
-def get_channels(no_cache=False, refresh_interval=4):
+async def async_get_channels(no_cache=False, refresh_interval=4):
     '''
     Get channel list and corresponding urls
     '''
@@ -60,7 +62,7 @@ def get_channels(no_cache=False, refresh_interval=4):
         else:
             _LOGGER.debug('Found outdated channel list in cache. Update it.')
             _CACHE.pop('channels')
-    soup = _request_soup(BASE_URL + '/plan.html')
+    soup = await _async_request_soup(BASE_URL + '/plan.html')
     channels = {}
     for li_item in soup.find_all('li'):
         try:
@@ -70,23 +72,13 @@ def get_channels(no_cache=False, refresh_interval=4):
             href = child.get('href')
             if not href or not href.startswith('/programme/chaine'):
                 continue
-            channels[child.get('title')] = href
+            channels[child.get('title')] = BASE_URL + href
         except Exception as exc:
             _LOGGER.error('Exception occured while fetching the channel '
                           'list: %s', exc)
     if channels:
         _CACHE['channels'] = {'last_updated': now, 'data': channels}
         return _CACHE['channels']
-
-
-def get_channel_url(channel):
-    '''
-    Get the URL of a channel
-    '''
-    chans = get_channels()
-    rel_url = chans.get('data', {}).get(channel)
-    if rel_url:
-        return BASE_URL + rel_url
 
 
 def resize_program_image(img_url, img_size=300):
@@ -108,7 +100,7 @@ def resize_program_image(img_url, img_size=300):
         img_url)
 
 
-async def async_extract_program_summary(data):
+def extract_program_summary(data):
     '''
     Extract the summary data from a program's detail page
     '''
@@ -129,7 +121,7 @@ async def async_set_summary(program):
     import aiohttp
     async with aiohttp.ClientSession() as session:
         async with session.get(program.get('url')) as resp:
-            summary = await async_extract_program_summary(await resp.text())
+            summary = extract_program_summary(await resp.text())
             program['summary'] = summary
             return program
 
@@ -138,7 +130,7 @@ async def async_get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
     Get the program data for a channel
     '''
-    chan = determine_channel(channel)
+    chan = await async_determine_channel(channel)
     now = datetime.datetime.now()
     max_cache_age = datetime.timedelta(hours=refresh_interval)
     if not no_cache and 'guide' in _CACHE and _CACHE.get('guide').get(chan):
@@ -150,11 +142,12 @@ async def async_get_program_guide(channel, no_cache=False, refresh_interval=4):
         else:
             _LOGGER.debug('Found outdated program guide in cache. Update it.')
             _CACHE['guide'].pop(chan)
-    url = get_channel_url(chan)
+    chans = await async_get_channels()
+    url = chans.get('data', {}).get(chan)
     if not url:
         _LOGGER.error('Could not determine URL for %s', chan)
         return
-    soup = _request_soup(url)
+    soup = await _async_request_soup(url)
     programs = []
     for prg_item in soup.find_all('div', {'class': 'program-infos'}):
         try:
@@ -196,7 +189,7 @@ async def async_get_current_program(channel, no_cache=False):
     '''
     Get the current program info
     '''
-    chan = determine_channel(channel)
+    chan = await async_determine_channel(channel)
     guide = await async_get_program_guide(chan, no_cache)
     if not guide:
         _LOGGER.warning('Could not retrieve TV program for %s', channel)
