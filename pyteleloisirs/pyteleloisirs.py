@@ -202,13 +202,19 @@ async def async_get_current_program(channel, no_cache=False):
             return prog
 
 
-def get_program_guide(channel, no_cache=False):
+def get_channels(*args, **kwargs):
     loop = asyncio.get_event_loop()
-    res = loop.run_until_complete(async_get_program_guide(channel, no_cache))
+    res = loop.run_until_complete(async_get_channels(*args, **kwargs))
     return res
 
 
-def get_current_program(channel, no_cache=False):
+def get_program_guide(*args, **kwargs):
     loop = asyncio.get_event_loop()
-    res = loop.run_until_complete(async_get_current_program(channel, no_cache))
+    res = loop.run_until_complete(async_get_program_guide(*args, **kwargs))
+    return res
+
+
+def get_current_program(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    res = loop.run_until_complete(async_get_current_program(*args, **kwargs))
     return res
