@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='pyteleloisirs',
-    version='2.2',
+    version='3.0',
     license='GPL3',
     description='Get TV program data from teleloisirs',
     long_description=open('README.rst').read(),
