@@ -100,6 +100,51 @@ def resize_program_image(img_url, img_size=300):
         img_url)
 
 
+def get_current_program_progress(program):
+    '''
+    Get the current progress of the program in %
+    '''
+    now = datetime.datetime.now()
+    program_duration = get_program_duration(program)
+    if not program_duration:
+        return
+    progress = now - program_start
+    return progress.seconds * 100 / program_duration.seconds
+
+
+def get_program_duration(program):
+    '''
+    Get a program's duration in seconds
+    '''
+    program_start = program.get('start_time')
+    program_end = program.get('end_time')
+    if not program_start or not program_end:
+        _LOGGER.error('Could not determine program start and/or end times.')
+        _LOGGER.debug('Program data: %s', program)
+        return
+    program_duration = program_end - program_start
+    return program_duration.seconds
+
+
+def get_remaining_time(program):
+    '''
+    Get the remaining time in seconds of a program that is currently on.
+    '''
+    now = datetime.datetime.now()
+    program_start = program.get('start_time')
+    program_end = program.get('end_time')
+    if not program_start or not program_end:
+        _LOGGER.error('Could not determine program start and/or end times.')
+        _LOGGER.debug('Program data: %s', program)
+        return
+    if now > program_end:
+        _LOGGER.error('The provided program has already ended.')
+        _LOGGER.debug('Program data: %s', program)
+        return 0
+    progress = now - program_start
+    return progress.seconds
+
+
 def extract_program_summary(data):
     '''
     Extract the summary data from a program's detail page
