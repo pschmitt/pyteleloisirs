@@ -20,10 +20,10 @@ def _async_request_soup(url):
     from bs4 import BeautifulSoup
     import aiohttp
     _LOGGER.debug('GET %s', url)
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            return BeautifulSoup(yield from resp.text(), 'html.parser')
-
+    with aiohttp.ClientSession() as session:
+        resp = yield from session.get(url)
+        text = yield from resp.text()
+        return BeautifulSoup(text, 'html.parser')
 
 
 @asyncio.coroutine
@@ -167,11 +167,12 @@ def async_set_summary(program):
     Set a program's summary
     '''
     import aiohttp
-    async with aiohttp.ClientSession() as session:
-        async with session.get(program.get('url')) as resp:
-            summary = extract_program_summary(yield from resp.text())
-            program['summary'] = summary
-            return program
+    with aiohttp.ClientSession() as session:
+        resp = yield from session.get(program.get('url'))
+        text = yield from resp.text()
+        summary = extract_program_summary(text)
+        program['summary'] = summary
+        return program
 
 
 @asyncio.coroutine
