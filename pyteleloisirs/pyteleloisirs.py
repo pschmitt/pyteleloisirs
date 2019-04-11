@@ -199,9 +199,7 @@ async def async_get_program_guide(channel, no_cache=False, refresh_interval=4):
             prog_info = prg_item.find('a', {'class': 'prog_name'})
             prog_name = prog_info.text.strip()
             prog_url = prog_info.get('href')
-            if prog_url:
-                prog_url = BASE_URL + prog_url
-            else:
+            if not prog_url:
                 _LOGGER.warning('Failed to retrive the detail URL for program %s. '
                                 'The summary will be empty', prog_name)
             prog_type = prg_item.find('span', {'class': 'prog_type'}).text.strip()
