@@ -154,8 +154,10 @@ def extract_program_summary(data):
         return soup.find(
             'div', {'class': 'episode-synopsis'}
         ).find_all('div')[-1].text.strip()
-    except Exception as exc:
-        _LOGGER.error('Exception during summary extraction: %s', exc)
+    except Exception:
+        _LOGGER.info('No summary found for program: %s',
+                     soup.find('a', {'class': 'prog_name'}))
+        return "No summary"
 
 
 async def async_set_summary(program):
