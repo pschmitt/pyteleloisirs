@@ -156,7 +156,7 @@ def extract_program_summary(data):
         ).find_all('div')[-1].text.strip()
     except Exception:
         _LOGGER.info('No summary found for program: %s',
-                     soup.find('a', {'class': 'prog_name'}))
+                     soup.find('h1').text.strip())
         return "No summary"
 
 
@@ -179,6 +179,7 @@ async def async_get_program_guide(channel, no_cache=False, refresh_interval=4):
     '''
     chan = await async_determine_channel(channel)
     now = datetime.datetime.now()
+    today = datetime.date.today()
     max_cache_age = datetime.timedelta(hours=refresh_interval)
     if not no_cache and 'guide' in _CACHE and _CACHE.get('guide').get(chan):
         cache = _CACHE.get('guide').get(chan)
@@ -196,22 +197,28 @@ async def async_get_program_guide(channel, no_cache=False, refresh_interval=4):
         return
     soup = await _async_request_soup(url)
     programs = []
-    for prg_item in soup.find_all('div', {'class': 'program-infos'}):
+    for prg_item in soup.find_all('div', {'class': 'singleBroadcastCard'}):
         try:
-            prog_info = prg_item.find('a', {'class': 'prog_name'})
-            prog_name = prog_info.text.strip()
-            prog_url = prog_info.get('href')
+            prog_info = prg_item.find('a', {'class': 'singleBroadcastCard-infos'})
+            prog_title = prg_item.find('a', {'class': 'singleBroadcastCard-title'})
+            prog_name = prog_title.text.strip()
+            prog_url = prog_title.get('href')
             if not prog_url:
                 _LOGGER.warning('Failed to retrive the detail URL for program %s. '
                                 'The summary will be empty', prog_name)
-            prog_type = prg_item.find('span', {'class': 'prog_type'}).text.strip()
-            prog_times = prg_item.find('div', {'class': 'prog_progress'})
-            prog_start = datetime.datetime.fromtimestamp(
-                int(prog_times.get('data-start')))
-            prog_end = datetime.datetime.fromtimestamp(
-                int(prog_times.get('data-end')))
-            img = prg_item.find_previous_sibling().find(
-                'img', {'class': 'prime_broadcast_image'})
+            prog_type = prg_item.find('div', {'class': 'singleBroadcastCard-genre'}).text.strip()
+            prog_times = prg_item.find('span', {'class': 'singleBroadcastCard-durationContent'}).text.strip()
+            start_time = prg_item.find('div', {'class': 'singleBroadcastCard-hour'}).text.strip().split('h')
+            start_time = [ int(i) for i in start_time ]
+            duration = prog_times.replace('min', '').split('h')
+            if len(duration) == 1:
+                duration.insert(0, 0)
+            elif not duration[1]:
+                duration[1] = 0
+            duration = [ int(i) for i in duration ]
+            prog_start = datetime.datetime.combine(today, datetime.time(start_time[0], start_time[1]))
+            prog_end = prog_start + datetime.timedelta(hours=duration[0], minutes=duration[1])
+            img = prg_item.find('img', {'class': 'apply-ratio'})
             prog_img = img.get('data-src') if img else None
             programs.append(
                 {'name': prog_name, 'type': prog_type, 'img': prog_img,
