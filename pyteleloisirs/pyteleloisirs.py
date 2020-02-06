@@ -151,13 +151,17 @@ def extract_program_summary(data):
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(data, 'html.parser')
     try:
-        return soup.find(
-            'div', {'class': 'episode-synopsis'}
-        ).find_all('div')[-1].text.strip()
+        return soup.\
+            find('p', {'class': 'synopsis-text'}).\
+            text.\
+            strip()
     except Exception:
         _LOGGER.info('No summary found for program: %s',
                      soup.find('h1').text.strip())
-        return "No summary"
+    finally:
+        _LOGGER.info('No summary found nor program name')
+
+    return "No summary"
 
 
 async def async_set_summary(program):
